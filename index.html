@@ -141,7 +141,7 @@ camera.position.set(-6, 3.2, 7);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 2.5; controls.maxDistance = 40;
-controls.target.set(0, 1.6, 0);
+controls.target.set(0, 1.6, 1.6);
 controls.enabled = false;
 
 /* ------------------------------------------------------------------ */
@@ -677,7 +677,8 @@ function toggleWaves() { const a = audio(); if (a.state === 'suspended') a.resum
 /* ------------------------------------------------------------------ */
 /*  Input                                                              */
 /* ------------------------------------------------------------------ */
-const keys = {}; let hopV = 0, hopY = 0, airborne = false, laneTarget = 0, lane = 0, bellRing = 0, camIdx = 0;
+const LANE_C = 1.6, LANE_W = 0.85; // right-hand traffic: right lane centre (+z), keep lane changes inside it
+const keys = {}; let hopV = 0, hopY = 0, airborne = false, laneTarget = 0, lane = LANE_C, bellRing = 0, camIdx = 0;
 const CAMS = ['follow', 'side', 'front', 'cockpit', 'drone', 'orbit'];
 const CAM_NAMES = { follow: '跟随', side: '侧拍', front: '迎面', cockpit: '鹈鹕视角', drone: '航拍环绕', orbit: '自由镜头' };
 function hop() { if (airborne) return; airborne = true; hopV = 5.2; spawnFeathers(rig.position.clone().add(V3(-0.3, 2.2, 0)), 26); toast('🪶 起跳！'); }
@@ -779,7 +780,7 @@ function solveLeg(leg, target) {
 function updateScarf(dt) {
   const anchor = torso.localToWorld(V3(0.3, 0.42, 0.12));
   if (!P.scarf) { scarfMesh.visible = false; return; } scarfMesh.visible = true;
-  const wind = V3(-P.speed * 0.9 - 1.5, 0, Math.sin(clock.elapsedTime * 3) * 0.6 + (lane - laneTarget) * 2);
+  const wind = V3(-P.speed * 0.9 - 1.5, 0, Math.sin(clock.elapsedTime * 3) * 0.6 + (lane - (LANE_C + laneTarget * LANE_W)) * 2);
   const gravity = V3(0, -6, 0); const seg = 0.09; const step = Math.min(dt, 1 / 30);
   for (let i = 1; i < SCARF_N; i++) {
     const p = scarfPts[i], prev = scarfPrev[i]; const vel = p.clone().sub(prev).multiplyScalar(0.985); prev.copy(p);
@@ -817,8 +818,9 @@ function animate() {
   if (keys.ArrowUp) P.targetSpeed = clamp(P.targetSpeed + 6 * dt, 0, 16);
   if (keys.ArrowDown) P.targetSpeed = clamp(P.targetSpeed - 8 * dt, 0, 16);
   P.speed += (P.targetSpeed - P.speed) * (1 - Math.exp(-dt * 1.4));
-  lane += (laneTarget * 1.6 - lane) * (1 - Math.exp(-dt * 3));
-  const steerAmt = (laneTarget * 1.6 - lane);
+  const laneZ = LANE_C + laneTarget * LANE_W;
+  lane += (laneZ - lane) * (1 - Math.exp(-dt * 3));
+  const steerAmt = (laneZ - lane);
   if (airborne) { hopV -= 12 * dt; hopY += hopV * dt; if (hopY <= 0) { hopY = 0; airborne = false; spawnRingDust(); } }
   rig.position.set(0, hopY, lane);
   rig.rotation.x = -steerAmt * 0.25;           // lean into turn
@@ -861,7 +863,7 @@ function animate() {
 
   // --- world scroll
   const dx = P.speed * dt;
-  roadTex.offset.x -= dx / 6; sandTex.offset.x -= dx / (WORLD_LEN / 60) / 1; shoulder.material.map.offset.x -= dx / 4; beach.material.map.offset.x -= dx / 5.5;
+  roadTex.offset.x += dx / 6; sandTex.offset.x += dx / 4; shoulder.material.map.offset.x += dx / 4; beach.material.map.offset.x += dx / 5.5;
   for (const o of scenery) { o.position.x -= dx; if (o.position.x < -WORLD_LEN / 2) { o.position.x += WORLD_LEN; if (o.userData.leaves) o.position.z = rnd(5.5, 14); } }
   for (const c of clouds) { c.position.x -= (dx * 0.25 + c.userData.speed * dt); if (c.position.x < -170) c.position.x += 340; }
   for (const b of buoys) { b.position.y = Math.sin(t * 1.3 + b.position.x) * 0.12; b.rotation.z = Math.sin(t * 0.9 + b.position.z) * 0.1; }
